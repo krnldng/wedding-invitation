@@ -13,6 +13,9 @@
  * Khi sửa code này, phải vào Deploy -> Manage deployments -> Edit -> Version: New version
  * thì URL cũ mới chạy code mới.
  *
+ * Xoá / sửa lời chúc trực tiếp trên sheet: sửa nội dung ô thì cache tự xoá; xoá cả dòng thì
+ * bấm menu "Lời chúc" -> "Làm mới (xoá cache)" (menu hiện sau khi tải lại trang Google Sheet).
+ *
  * API:
  *  GET  <url>  -> { ok: true, data: [{ name, message, time }] }  (mới nhất trước, chỉ các lời chúc có nội dung)
  *  POST <url>  body JSON (gửi dạng text/plain để tránh CORS preflight): { name, presence, message }
@@ -85,6 +88,30 @@ function readWishes_() {
     .reverse();
 
   return data;
+}
+
+// Xoá cache lời chúc. Chạy tay trong Apps Script, hoặc dùng menu "Lời chúc" trên Google Sheet.
+function clearCache() {
+  CacheService.getScriptCache().remove(CACHE_KEY);
+}
+
+// Thêm menu "Lời chúc" khi mở Google Sheet.
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Lời chúc')
+    .addItem('Làm mới (xoá cache)', 'clearCacheFromMenu')
+    .addToUi();
+}
+
+function clearCacheFromMenu() {
+  clearCache();
+  SpreadsheetApp.getActiveSpreadsheet().toast('Đã xoá cache, thiệp sẽ hiển thị danh sách mới.');
+}
+
+// Sửa / xoá nội dung ô trong sheet thì tự xoá cache.
+// (Xoá cả dòng không kích hoạt onEdit, khi đó dùng menu "Lời chúc" -> "Làm mới".)
+function onEdit() {
+  clearCache();
 }
 
 function doPost(e) {
