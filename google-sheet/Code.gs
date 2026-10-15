@@ -24,6 +24,9 @@ const HEADERS = ['Thời gian', 'Họ tên', 'Tham dự', 'Lời chúc'];
 const PRESENCE = { 1: 'Sẽ tham dự', 2: 'Không thể tham dự', 3: 'Không chắc' };
 const MAX_NAME = 50;
 const MAX_MESSAGE = 1000;
+const CACHE_KEY = 'wishes';
+// Cache is cleared on every new wish; this only bounds staleness after editing the sheet by hand.
+const CACHE_SECONDS = 300;
 
 function getSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -48,10 +51,27 @@ function safeCell_(value) {
 }
 
 function doGet() {
+  // Skip reading the sheet while the cached answer is fresh (cleared on every new wish).
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get(CACHE_KEY);
+  if (hit) {
+    return ContentService.createTextOutput(hit).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const body = JSON.stringify({ ok: true, data: readWishes_() });
+  try {
+    cache.put(CACHE_KEY, body, CACHE_SECONDS);
+  } catch (err) {
+    // value over 100KB cannot be cached, just serve it.
+  }
+  return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JSON);
+}
+
+function readWishes_() {
   const sheet = getSheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
-    return json_({ ok: true, data: [] });
+    return [];
   }
 
   const rows = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
@@ -64,7 +84,7 @@ function doGet() {
     }))
     .reverse();
 
-  return json_({ ok: true, data: data });
+  return data;
 }
 
 function doPost(e) {
@@ -90,6 +110,7 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     getSheet_().appendRow([new Date(), safeCell_(name), presence, safeCell_(message)]);
+    CacheService.getScriptCache().remove(CACHE_KEY);
   } finally {
     lock.releaseLock();
   }

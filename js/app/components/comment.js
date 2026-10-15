@@ -37,6 +37,20 @@ export const comment = (() => {
   const lastRender = [];
 
   /**
+   * Last wishes list, kept in localStorage so the modal opens instantly.
+   * @type {ReturnType<typeof storage>|null}
+   */
+  let wishes = null;
+
+  /**
+   * @type {{at: number, promise: Promise<{name?: string, message?: string}[]>}|null}
+   */
+  let wishesRequest = null;
+
+  // reuse a fetched list for this long before asking the API again.
+  const WISHES_TTL = 1000 * 60;
+
+  /**
    * @returns {string}
    */
   const onNullComment = () => {
@@ -526,6 +540,15 @@ export const comment = (() => {
     if (ok) {
       storage("information").set("name", name);
       document.getElementById("form-comment").value = "";
+
+      // show the new wish right away, the next fetch brings the real list.
+      if (message.length > 0) {
+        wishes.set("list", [
+          { name, message, time: new Date().toISOString() },
+          ...(wishes.get("list") ?? []),
+        ]);
+      }
+      wishesRequest = null;
     }
 
     if (!ok) {
@@ -539,37 +562,52 @@ export const comment = (() => {
   };
 
   /**
-   * @returns {Promise<void>}
+   * Shares one in-flight/recent request between the prefetch and the modal.
+   * @returns {Promise<{name?: string, message?: string}[]>}
    */
-  const loadWishes = async () => {
-    const container = document.getElementById("wish-content");
-    if (!container) {
+  const fetchWishes = () => {
+    if (wishesRequest && Date.now() - wishesRequest.at < WISHES_TTL) {
+      return wishesRequest.promise;
+    }
+
+    const promise = fetch(wishApi())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(res.statusText);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data.ok === false) {
+          throw new Error(data.error);
+        }
+        const items = Array.isArray(data) ? data : (data.data ?? []);
+        wishes.set("list", items);
+        return items;
+      })
+      .catch((err) => {
+        wishesRequest = null;
+        throw err;
+      });
+
+    wishesRequest = { at: Date.now(), promise };
+    return promise;
+  };
+
+  /**
+   * @param {HTMLElement} container
+   * @param {{name?: string, message?: string}[]} items
+   * @returns {void}
+   */
+  const renderWishes = (container, items) => {
+    if (items.length === 0) {
+      container.innerHTML = `<p class="text-center" style="padding-top: 10rem;">Chúng mình mong nhận được lời chúc từ Quý khách ❤️</p>`;
       return;
     }
 
-    container.innerHTML = `<div class="d-flex justify-content-center align-items-center py-5">
-      <div class="spinner-border text-secondary" role="status"><span class="visually-hidden">Loading...</span></div>
-    </div>`;
-
-    try {
-      const res = await fetch(wishApi());
-      if (!res.ok) {
-        throw new Error(res.statusText);
-      }
-      const data = await res.json();
-      if (data.ok === false) {
-        throw new Error(data.error);
-      }
-      const items = Array.isArray(data) ? data : (data.data ?? []);
-
-      if (items.length === 0) {
-        container.innerHTML = `<p class="text-center" style="padding-top: 10rem;">Chúc mình mong nhận được lời chúc từ Quý khách ❤️</p>`;
-        return;
-      }
-
-      container.innerHTML = `<div class="row row-cols-1 row-cols-sm-4 g-2">${items
-        .map(
-          (w) => `
+    container.innerHTML = `<div class="row row-cols-1 row-cols-sm-4 g-2">${items
+      .map(
+        (w) => `
         <div class="col">
           <div class="h-100 p-2 rounded-4 shadow-sm" style="background:rgba(255,255,255,0.6);">
             <div class="d-flex align-items-center gap-1 mb-1">
@@ -578,10 +616,35 @@ export const comment = (() => {
             ${w.message ? `<p class="mb-1">${util.escapeHtml(w.message)}</p>` : ""}
           </div>
         </div>`,
-        )
-        .join("")}</div>`;
+      )
+      .join("")}</div>`;
+  };
+
+  /**
+   * Shows the last known list instantly (if any), then the fresh one.
+   * @returns {Promise<void>}
+   */
+  const loadWishes = async () => {
+    const container = document.getElementById("wish-content");
+    if (!container) {
+      return;
+    }
+
+    const cached = wishes.get("list");
+    if (Array.isArray(cached)) {
+      renderWishes(container, cached);
+    } else {
+      container.innerHTML = `<div class="d-flex justify-content-center align-items-center py-5">
+      <div class="spinner-border text-secondary" role="status"><span class="visually-hidden">Loading...</span></div>
+    </div>`;
+    }
+
+    try {
+      renderWishes(container, await fetchWishes());
     } catch {
-      container.innerHTML = `<p class="text-center text-danger py-4">Không thể tải lời chúc, thử lại sau nhé 😭</p>`;
+      if (!Array.isArray(cached)) {
+        container.innerHTML = `<p class="text-center text-danger py-4">Không thể tải lời chúc, thử lại sau nhé 😭</p>`;
+      }
     }
   };
 
@@ -705,6 +768,14 @@ export const comment = (() => {
 
     owns = storage("owns");
     showHide = storage("comment");
+    wishes = storage("wishes");
+
+    // Apps Script takes 1-3s to answer, so start loading wishes as soon as the invitation is opened.
+    document.addEventListener("undangan.open", () => {
+      if (wishApi()) {
+        fetchWishes().catch(() => {});
+      }
+    });
 
     if (!showHide.has("hidden")) {
       showHide.set("hidden", []);
