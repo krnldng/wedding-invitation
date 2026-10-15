@@ -312,8 +312,7 @@ export const guest = (() => {
         const img = image.init();
         const aud = audio.init();
         const lib = loaderLibs();
-        const token = document.body.getAttribute('data-key');
-        const params = new URLSearchParams(window.location.search);
+        const wishApi = document.body.getAttribute('data-wish-api');
 
         window.addEventListener('resize', util.debounce(slide));
         document.addEventListener('undangan.progress.done', () => booting());
@@ -322,45 +321,16 @@ export const guest = (() => {
             img.download(e.currentTarget.getAttribute('data-src'));
         });
 
-        if (!token || token.length <= 0) {
+        // wishes are stored in Google Sheet (google-sheet/Code.gs), hide the section when not configured.
+        if (!wishApi || wishApi.length <= 0) {
             document.getElementById('comment')?.remove();
             document.querySelector('a.nav-link[href="#comment"]')?.closest('li.nav-item')?.remove();
-
-            vid.load();
-            img.load();
-            aud.load();
-            lib.load({ confetti: document.body.getAttribute('data-confetti') === 'true' });
         }
 
-        if (token && token.length > 0) {
-            // add 2 progress for config and comment.
-            // before img.load();
-            progress.add();
-            // progress.add();
-
-            // if don't have data-src.
-            if (!img.hasDataSrc()) {
-                img.load();
-            }
-
-            session.guest(params.get('k') ?? token).then(({ data }) => {
-                document.dispatchEvent(new Event('undangan.session'));
-                progress.complete('config');
-
-                if (img.hasDataSrc()) {
-                    img.load();
-                }
-
-                vid.load();
-                aud.load();
-                lib.load({ confetti: data.is_confetti_animation });
-
-                // comment.show()
-                //     .then(() => progress.complete('comment'))
-                //     .catch(() => progress.invalid('comment'));
-
-            }).catch(() => progress.invalid('config'));
-        }
+        vid.load();
+        img.load();
+        aud.load();
+        lib.load({ confetti: document.body.getAttribute('data-confetti') === 'true' });
     };
 
     /**

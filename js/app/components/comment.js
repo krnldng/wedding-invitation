@@ -13,7 +13,6 @@ import {
   HTTP_POST,
   HTTP_DELETE,
   HTTP_PUT,
-  HTTP_STATUS_CREATED,
 } from "../../connection/request.js";
 
 export const comment = (() => {
@@ -484,37 +483,52 @@ export const comment = (() => {
   };
 
   /**
+   * Google Apps Script web app url (see google-sheet/Code.gs).
+   * @returns {string}
+   */
+  const wishApi = () => document.body.getAttribute("data-wish-api") ?? "";
+
+  /**
    * @param {HTMLButtonElement} button
    * @returns {Promise<void>}
    */
   const send = async (button) => {
-    // implement this function using native fetch API without using request function.
     const name = document.getElementById("form-name").value?.trim() ?? "";
     if (name.length === 0) {
-      util.notify("Name cannot be empty.").warning();
+      util.notify("Vui lòng nhập họ tên.").warning();
       return;
     }
     const presence = Number(document.getElementById("form-presence").value);
     const message = document.getElementById("form-comment").value?.trim() ?? "";
     const btn = util.disableButton(button);
-    const status = await fetch("https://wedding-webapi.azurewebsites.net/wishes", {
+
+    // Apps Script does not answer CORS preflight, so send JSON as text/plain (simple request).
+    const ok = await fetch(wishApi(), {
       method: HTTP_POST,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "text/plain;charset=utf-8",
       },
       body: JSON.stringify({
         name: name,
         presence: presence,
-        message: message
+        message: message,
       }),
-    });
+    })
+      .then((res) => (res.ok ? res.json() : { ok: false }))
+      .then((res) => res.ok === true)
+      .catch(() => false);
 
     btn.restore();
 
     const errorEl = document.getElementById("wish-error");
     const successEl = document.getElementById("wish-success");
 
-    if (status.status !== HTTP_STATUS_CREATED) {
+    if (ok) {
+      storage("information").set("name", name);
+      document.getElementById("form-comment").value = "";
+    }
+
+    if (!ok) {
       errorEl?.classList.remove("d-none");
       successEl?.classList.add("d-none");
       return;
@@ -538,14 +552,15 @@ export const comment = (() => {
     </div>`;
 
     try {
-      const res = await fetch("https://wedding-webapi.azurewebsites.net/wishes");
+      const res = await fetch(wishApi());
       if (!res.ok) {
         throw new Error(res.statusText);
       }
       const data = await res.json();
-      const items = Array.isArray(data)
-        ? data
-        : (data.data ?? data.lists ?? []);
+      if (data.ok === false) {
+        throw new Error(data.error);
+      }
+      const items = Array.isArray(data) ? data : (data.data ?? []);
 
       if (items.length === 0) {
         container.innerHTML = `<p class="text-center" style="padding-top: 10rem;">Chúc mình mong nhận được lời chúc từ Quý khách ❤️</p>`;

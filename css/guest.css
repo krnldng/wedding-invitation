@@ -111,17 +111,17 @@ svg {
 }
 
 .text-wedding {
-    color: #c2456e !important;
+    color: #b8323c !important;
 }
 
 .btn-wedding {
-    background: linear-gradient(135deg, #e8627a 0%, #c2456e 50%, #9b3060 100%);
+    background: linear-gradient(135deg, #cf5a4f 0%, #a8232e 50%, #7a1520 100%);
     color: #fff !important;
     border: none;
     letter-spacing: 0.06em;
     font-size: 0.9rem;
     transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
-    box-shadow: 0 4px 15px rgba(194, 69, 110, 0.45) !important;
+    box-shadow: 0 4px 15px rgba(168, 35, 46, 0.45) !important;
 }
 
 .btn-wedding:hover,
@@ -129,7 +129,7 @@ svg {
     color: #fff !important;
     filter: brightness(1.1);
     transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 7px 22px rgba(194, 69, 110, 0.55) !important;
+    box-shadow: 0 7px 22px rgba(168, 35, 46, 0.55) !important;
 }
 
 .btn-wedding:active {
